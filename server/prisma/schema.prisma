@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Spec {
+  id          String   @id @default(uuid())
+  clerkId     String
+  name        String
+  description String?
+  content     String   @db.Text
+  parsedUrl   String?
+  isPublic    Boolean  @default(false)
+  shareToken  String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  history     RequestHistory[]
+  collections Collection[]
+
+  @@index([clerkId])
+}
+
+model RequestHistory {
+  id              String   @id @default(uuid())
+  clerkId         String
+  specId          String?
+  method          String
+  url             String
+  requestHeaders  Json
+  requestBody     String?  @db.Text
+  statusCode      Int?
+  responseBody    String?  @db.Text
+  responseHeaders Json?
+  latencyMs       Int?
+  createdAt       DateTime @default(now())
+
+  spec Spec? @relation(fields: [specId], references: [id], onDelete: SetNull)
+
+  @@index([clerkId])
+  @@index([specId])
+}
+
+model Collection {
+  id        String   @id @default(uuid())
+  clerkId   String
+  specId    String
+  name      String
+  createdAt DateTime @default(now())
+
+  spec     Spec           @relation(fields: [specId], references: [id], onDelete: Cascade)
+  requests SavedRequest[]
+
+  @@index([clerkId])
+}
+
+model SavedRequest {
+  id           String   @id @default(uuid())
+  collectionId String
+  name         String
+  method       String
+  path         String
+  parameters   Json
+  requestBody  String?  @db.Text
+  createdAt    DateTime @default(now())
+
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+}
+
+model AiExplanation {
+  id           String   @id @default(uuid())
+  endpointHash String   @unique
+  explanation  String   @db.Text
+  createdAt    DateTime @default(now())
+
+  @@index([endpointHash])
+}
