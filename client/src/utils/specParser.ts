@@ -17,9 +17,8 @@ export const transformSpec = async (rawInput: string): Promise<ParsedSpec> => {
   }
 
   // Dereference $refs using SwaggerParser
-  // We clone deeply first because SwaggerParser mutates the object
   const cloned = JSON.parse(JSON.stringify(parsed));
-  const api = await SwaggerParser.dereference(cloned);
+  const api = (await SwaggerParser.dereference(cloned)) as any;
 
   const info = api.info || { title: "Unknown API", version: "1.0.0" };
   const servers = api.servers || [];
@@ -37,7 +36,7 @@ export const transformSpec = async (rawInput: string): Promise<ParsedSpec> => {
         const endpointId = `${method.toUpperCase()}:${path}`;
         
         // Parse parameters
-        const parameters: ParsedParameter[] = ((details.parameters || []) as any[]).map((p: any) => ({
+        const parameters: ParsedParameter[] = (((details as any).parameters || []) as any[]).map((p: any) => ({
           name: p.name,
           in: p.in,
           required: p.required || false,
@@ -64,8 +63,8 @@ export const transformSpec = async (rawInput: string): Promise<ParsedSpec> => {
 
         // Parse Request Body
         let requestBody: ParsedRequestBody | undefined = undefined;
-        if (details.requestBody) {
-          const reqBody = details.requestBody;
+        if ((details as any).requestBody) {
+          const reqBody = (details as any).requestBody;
           const contentOutput: Record<string, any> = {};
           
           if (reqBody.content) {
@@ -86,8 +85,8 @@ export const transformSpec = async (rawInput: string): Promise<ParsedSpec> => {
 
         // Parse Responses
         const responses: Record<string, ParsedResponse> = {};
-        if (details.responses) {
-          for (const [status, resDetails] of Object.entries(details.responses as any)) {
+        if ((details as any).responses) {
+          for (const [status, resDetails] of Object.entries((details as any).responses as any)) {
             const contentOutput: Record<string, any> = {};
             if ((resDetails as any).content) {
               for (const [contentType, contentDetails] of Object.entries((resDetails as any).content as any)) {
@@ -108,14 +107,14 @@ export const transformSpec = async (rawInput: string): Promise<ParsedSpec> => {
           id: endpointId,
           method: method as HttpMethod,
           path,
-          summary: details.summary,
-          description: details.description,
-          tags: details.tags || [],
+          summary: (details as any).summary,
+          description: (details as any).description,
+          tags: (details as any).tags || [],
           parameters,
           requestBody,
           responses,
-          security: details.security,
-          deprecated: details.deprecated || false,
+          security: (details as any).security,
+          deprecated: (details as any).deprecated || false,
         });
       }
     }

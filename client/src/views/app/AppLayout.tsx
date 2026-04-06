@@ -352,7 +352,6 @@ export function AppLayout() {
 
                         <FolderOpen 
                           className={`w-4 h-4 shrink-0 ${specState.activeModuleId === mod.id ? 'text-accent' : 'text-secondary'}`} 
-                          title={!isExpanded ? mod.name : ""}
                         />
 
                         <span
