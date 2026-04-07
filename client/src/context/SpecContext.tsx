@@ -71,6 +71,9 @@ function specReducer(state: SpecContextState, action: SpecAction): SpecContextSt
         ),
       };
 
+    case "SET_BASE_URL":
+      return { ...state, baseUrl: action.payload };
+
     case "RESET":
       return initialState;
 

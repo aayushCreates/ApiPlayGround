@@ -1,6 +1,8 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 
 import { errorHandler } from "./middlewares/error.middleware";
 import { proxyRouter } from "./routes/proxy.routes";
@@ -9,8 +11,6 @@ import { historyRouter } from "./routes/history.routes";
 import { collectionRouter } from "./routes/collection.routes";
 import { aiRouter } from "./routes/ai.routes";
 import { verifyDbConnection } from "./config/verifyDb";
-
-dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 5000;
