@@ -1,11 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { redis } from "../config/redis";
-import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "../config/db";
-
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+import { generateAiResponse } from "../services/ai.service";
 
 export const explainEndpoint = async (
   req: Request,
@@ -89,14 +85,7 @@ What a 200/201 response looks like.
 
 Be specific and practical. No filler text.`;
 
-    const msg = await anthropic.messages.create({
-      model: "claude-3-5-sonnet-20241022",
-      max_tokens: 1024,
-      messages: [{ role: "user", content: prompt }],
-    });
-
-    const explanationText =
-      (msg.content[0] as unknown as { text: string }).text || "";
+    const explanationText = await generateAiResponse(prompt);
 
     await prisma.aiExplanation.create({
       data: {
@@ -110,3 +99,72 @@ Be specific and practical. No filler text.`;
     next(error);
   }
 };
+
+const safeStringify = (obj: unknown): string => {
+  try {
+    return JSON.stringify(obj, null, 2);
+  } catch {
+    return String(obj);
+  }
+};
+
+export const debugError = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { requestDetails, responseDetails, endpointData } = req.body;
+
+    const rateLimitKey = `ai_debug:${req.clerkId}`;
+    const requests = await redis.incr(rateLimitKey);
+    if (requests === 1) {
+      await redis.expire(rateLimitKey, 3600); // 1 hour
+    }
+    if (requests > 40) {
+      return res
+        .status(429)
+        .json({ message: "AI debug rate limit exceeded (40/hour)." });
+    }
+
+    // Trim large response bodies to avoid bloating the prompt
+    const trimmedResponse = {
+      ...(responseDetails || {}),
+      body: typeof responseDetails?.body === "string"
+        ? responseDetails.body.slice(0, 2000)
+        : responseDetails?.body,
+    };
+
+    const prompt = `You are an expert API debugging assistant.
+A developer tried to make an API request but encountered an error.
+Analyze the request, response, and expected endpoint schema to determine the problem.
+
+### Expected Endpoint Schema
+${endpointData ? safeStringify(endpointData) : "Not provided"}
+
+### Executed Request
+${safeStringify(requestDetails)}
+
+### Received Response (Error)
+${safeStringify(trimmedResponse)}
+
+Provide your response in GitHub Flavored Markdown with these sections:
+1. **Error Diagnosis**: Explain exactly why it failed (e.g. 401 Unauthorized, 400 Bad Request structure).
+2. **Detection Check**:
+    - Are there *wrong headers*? (e.g., missing specific Content-Type)
+    - Are there *missing params*? (e.g., query params, path params out of bounds)
+    - Are there *auth issues*? (e.g., missing Bearer token, invalid token syntax)
+3. **Suggested Fix**: Provide the exact fix the user should make (e.g. "Add a query parameter ?status=active" or "Change the request body to ..."). Provide code blocks if necessary.
+
+Be practical, direct, and helpful.`;
+
+    const markdown = await generateAiResponse(prompt);
+
+    res.json({ markdown });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : "AI service unavailable";
+    console.error("Debug AI error:", msg);
+    res.status(502).json({ message: msg });
+  }
+};
+

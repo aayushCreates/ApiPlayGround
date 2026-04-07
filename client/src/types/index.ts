@@ -203,3 +203,7 @@ export interface AiExplanationResult {
   explanation: string;
   cached: boolean;
 }
+
+export interface AiDebugResult {
+  markdown: string;
+}

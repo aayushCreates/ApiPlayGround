@@ -1,8 +1,10 @@
 import { useSpec } from "../../context/SpecContext";
-import { Send, Settings2, Loader2, Copy, Check, Trash2, PlusCircle } from "lucide-react";
+import { Send, Settings2, Loader2, Copy, Check, Trash2, PlusCircle, Sparkles, Edit2 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { proxyApi } from "../../api/proxy";
 import { historyApi } from "../../api/history";
+import { aiApi } from "../../api/ai";
+import ReactMarkdown from "react-markdown";
 
 interface ResponseData {
   statusCode: number;
@@ -21,7 +23,7 @@ interface QueryParam {
 }
 
 export function Playground() {
-  const { state: specState } = useSpec();
+  const { state: specState, dispatch: specDispatch } = useSpec();
   const ep = specState.selectedEndpoint;
 
   const derivedUrl = useMemo(() => {
@@ -52,6 +54,20 @@ export function Playground() {
   const [pathParams, setPathParams] = useState<Record<string, string>>({});
   const [queryParams, setQueryParams] = useState<QueryParam[]>([]);
 
+  // Base URL editing
+  const [showBaseUrlEditor, setShowBaseUrlEditor] = useState(false);
+  const [editableBaseUrl, setEditableBaseUrl] = useState(specState.baseUrl);
+
+  // Sync editable base url when context baseUrl changes (e.g. switching endpoints)
+  useEffect(() => {
+    setEditableBaseUrl(specState.baseUrl);
+  }, [specState.baseUrl]);
+
+  const handleBaseUrlSave = () => {
+    specDispatch({ type: "SET_BASE_URL", payload: editableBaseUrl });
+    setShowBaseUrlEditor(false);
+  };
+
   // Reset all request state when switching endpoints
   useEffect(() => {
     setPathParams({});
@@ -63,6 +79,9 @@ export function Playground() {
     setResponse(null);
     setIsSending(false);
     setCopied(false);
+    setDebugResult(null);
+    setIsDebugging(false);
+    setShowBaseUrlEditor(false);
     // When the endpoint changes, the derivedUrl will trigger the URL reset automatically
   }, [ep?.id, specState.activeModuleId]);
 
@@ -168,6 +187,8 @@ export function Playground() {
   const [response, setResponse] = useState<ResponseData | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [debugResult, setDebugResult] = useState<string | null>(null);
+  const [isDebugging, setIsDebugging] = useState(false);
 
   const getMethodColor = (method: string) => {
     switch (method.toLowerCase()) {
@@ -193,6 +214,7 @@ export function Playground() {
     if (!ep || !requestUrl.trim()) return;
     setIsSending(true);
     setResponse(null);
+    setDebugResult(null);
 
     try {
       const activeModule = specState.modules.find(m => m.id === specState.activeModuleId);
@@ -259,6 +281,57 @@ export function Playground() {
     }
   };
 
+  const handleDebug = async () => {
+    if (!response || !ep) return;
+    setIsDebugging(true);
+    setDebugResult(null);
+
+    const activeModule = specState.modules.find(m => m.id === specState.activeModuleId);
+    const variables = activeModule?.variables || {};
+
+    const interpolate = (str: string) => {
+      if (!str) return str;
+      return str.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
+        const varName = key.trim();
+        return variables[varName] !== undefined ? variables[varName] : match;
+      });
+    };
+
+    const finalUrl = interpolate(requestUrl);
+    const headers: Record<string, string> = {};
+    customHeaders.forEach(h => {
+      if (h.enabled && h.key.trim()) {
+        headers[interpolate(h.key.trim())] = interpolate(h.value);
+      }
+    });
+    if (authType === "bearer" && bearerToken.trim()) {
+      headers["Authorization"] = `Bearer ${interpolate(bearerToken)}`;
+    }
+
+    const finalBody = ["post", "put", "patch"].includes(ep.method.toLowerCase()) && requestBody.trim()
+        ? interpolate(requestBody)
+        : undefined;
+
+    try {
+      const res = await aiApi.debugError({
+        requestDetails: {
+          url: finalUrl,
+          method: ep.method.toUpperCase(),
+          headers: Object.keys(headers).length > 0 ? headers : undefined,
+          body: finalBody,
+        },
+        responseDetails: response,
+        endpointData: ep,
+      });
+      setDebugResult(res.markdown);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failure executing AI debug";
+      setDebugResult(`**Error initiating debug:** ${msg}`);
+    } finally {
+      setIsDebugging(false);
+    }
+  };
+
   const handleCopyResponse = () => {
     if (!response) return;
     const text = typeof response.body === "string"
@@ -298,33 +371,79 @@ export function Playground() {
 
   return (
     <div className="flex flex-col h-full bg-base overflow-hidden relative">
-      {/* URL BAR */}
-      <header className="h-16 flex items-center px-4 border-b border-border bg-surface/50 shrink-0 gap-3">
-         <div className={`px-3 py-1.5 rounded-md border font-bold text-xs uppercase tracking-wider ${getMethodColor(ep.method)}`}>
-           {ep.method}
-         </div>
-         <div className="flex-1 flex items-center bg-elevated border border-border-subtle rounded-md px-3 h-10 shadow-inner group transition-colors focus-within:border-accent">
-            <input
-              type="text"
-              className="flex-1 bg-transparent border-none outline-none text-primary font-mono text-sm"
-              value={requestUrl}
-              onChange={(e) => handleUrlChange(e.target.value)}
-              placeholder="https://api.example.com/v1/endpoint"
-              onKeyDown={(e) => { if (e.key === "Enter") handleSend(); }}
-            />
-         </div>
-         <button
-           onClick={handleSend}
-           disabled={isSending || !requestUrl.trim()}
-           className="h-10 px-6 bg-accent hover:bg-accent-hover active:bg-accent/80 text-white font-medium rounded-md flex items-center gap-2 transition-all shadow-lg shadow-accent/20 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-         >
-           {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-           {isSending ? "Sending..." : "Send"}
-         </button>
-      </header>
+       {/* URL BAR */}
+       <header className="flex flex-col border-b border-border bg-surface/50 shrink-0">
+          {/* Base URL Row (Collapsible/Editable) */}
+          <div className="flex items-center px-4 h-8 bg-elevated/30 border-b border-border/50 gap-2">
+            <span className="text-[10px] font-bold text-secondary uppercase tracking-tight">Base URL:</span>
+            {!showBaseUrlEditor ? (
+              <div className="flex items-center gap-2 group max-w-[400px]">
+                <span className="text-[10px] font-mono text-primary/70 truncate">
+                  {specState.baseUrl || "None set"}
+                </span>
+                <button 
+                  onClick={() => setShowBaseUrlEditor(true)}
+                  className="p-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-base rounded cursor-pointer"
+                >
+                  <Edit2 className="w-2.5 h-2.5 text-accent" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 flex-1 max-w-[500px]">
+                <input 
+                  type="text"
+                  value={editableBaseUrl}
+                  onChange={(e) => setEditableBaseUrl(e.target.value)}
+                  className="h-6 flex-1 bg-base border border-accent/30 rounded px-2 text-[10px] font-mono text-primary outline-none focus:border-accent"
+                  placeholder="https://api.example.com"
+                  autoFocus
+                />
+                <button 
+                  onClick={handleBaseUrlSave}
+                  className="h-6 px-3 bg-accent text-white text-[10px] font-bold rounded hover:bg-accent-hover cursor-pointer"
+                >
+                  Save
+                </button>
+                <button 
+                  onClick={() => {
+                    setShowBaseUrlEditor(false);
+                    setEditableBaseUrl(specState.baseUrl);
+                  }}
+                  className="h-6 px-3 bg-base text-secondary text-[10px] font-bold rounded hover:bg-elevated cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
 
-      <div className="flex-1 flex flex-col xl:flex-row overflow-hidden">
-        {/* REQUEST PANE */}
+          <div className="h-16 flex items-center px-4 gap-3">
+             <div className={`px-3 py-1.5 rounded-md border font-bold text-xs uppercase tracking-wider ${getMethodColor(ep.method)}`}>
+               {ep.method}
+             </div>
+             <div className="flex-1 flex items-center bg-elevated border border-border-subtle rounded-md px-3 h-10 shadow-inner group transition-colors focus-within:border-accent">
+                <input
+                  type="text"
+                  className="flex-1 bg-transparent border-none outline-none text-primary font-mono text-sm"
+                  value={requestUrl}
+                  onChange={(e) => handleUrlChange(e.target.value)}
+                  placeholder="https://api.example.com/v1/endpoint"
+                  onKeyDown={(e) => { if (e.key === "Enter") handleSend(); }}
+                />
+             </div>
+             <button
+               onClick={handleSend}
+               disabled={isSending || !requestUrl.trim()}
+               className="h-10 px-6 bg-accent hover:bg-accent-hover active:bg-accent/80 text-white font-medium rounded-md flex items-center gap-2 transition-all shadow-lg shadow-accent/20 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+             >
+               {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+               {isSending ? "Sending..." : "Send"}
+             </button>
+          </div>
+       </header>
+
+       <div className="flex-1 flex flex-col xl:flex-row overflow-hidden">
+         {/* REQUEST PANE */}
         <section className="flex-1 flex flex-col border-b xl:border-b-0 xl:border-r border-border min-h-0 bg-base">
            {/* TABS */}
            <div className="h-10 border-b border-border bg-surface/30 flex px-2 overflow-x-auto shrink-0 ">
@@ -568,9 +687,33 @@ export function Playground() {
 
              {!isSending && response && (
                <div className="flex flex-col gap-3 flex-1">
-                 {response.isError && (
-                   <div className="p-3 rounded-lg bg-danger/10 border border-danger/20 text-danger text-sm">
-                     <span className="font-semibold">Error: </span>{response.errorMessage}
+                 {(response.isError || response.statusCode >= 400 || response.statusCode === 0) && (
+                   <div className="flex flex-col gap-3">
+                     <div className="p-3 rounded-lg bg-danger/10 border border-danger/20 text-danger text-sm flex items-center justify-between">
+                       <div>
+                         <span className="font-semibold">{response.statusCode === 0 ? "Network Error" : "Error"}: </span>
+                         {response.errorMessage || response.statusText || "Request failed"}
+                       </div>
+                       <button
+                         onClick={handleDebug}
+                         disabled={isDebugging}
+                         className="px-3 py-1.5 bg-accent hover:bg-accent-hover text-white text-xs font-semibold rounded flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                       >
+                         {isDebugging ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                         {isDebugging ? "Analyzing..." : "Debug with AI"}
+                       </button>
+                     </div>
+                     {debugResult && (
+                       <div className="p-4 bg-accent/5 border border-accent/20 rounded-lg text-primary text-sm flex flex-col gap-2">
+                         <div className="flex items-center gap-2 mb-1 border-b border-accent/10 pb-2 text-accent font-bold">
+                           <Sparkles className="w-4 h-4" />
+                           AI Debug Assistant
+                         </div>
+                         <div className="prose prose-sm prose-invert max-w-none text-primary/80">
+                           <ReactMarkdown>{debugResult}</ReactMarkdown>
+                         </div>
+                       </div>
+                     )}
                    </div>
                  )}
                  <pre className="flex-1 p-4 bg-base border border-border rounded-lg text-sm font-mono text-primary overflow-auto whitespace-pre-wrap break-words ">
