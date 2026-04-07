@@ -55,8 +55,21 @@ function specReducer(state: SpecContextState, action: SpecAction): SpecContextSt
     case "PARSE_ERROR":
       return { ...state, isParsing: false, parseError: action.payload };
 
-    case "SET_BASE_URL":
-      return { ...state, baseUrl: action.payload };
+    case "UPDATE_MODULE_NAME":
+      return {
+        ...state,
+        modules: state.modules.map(m =>
+          m.id === action.payload.id ? { ...m, name: action.payload.name } : m
+        ),
+      };
+
+    case "UPDATE_MODULE_VARIABLES":
+      return {
+        ...state,
+        modules: state.modules.map(m =>
+          m.id === action.payload.id ? { ...m, variables: action.payload.variables } : m
+        ),
+      };
 
     case "RESET":
       return initialState;

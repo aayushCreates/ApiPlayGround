@@ -195,23 +195,38 @@ export function Playground() {
     setResponse(null);
 
     try {
+      const activeModule = specState.modules.find(m => m.id === specState.activeModuleId);
+      const variables = activeModule?.variables || {};
+
+      const interpolate = (str: string) => {
+        if (!str) return str;
+        return str.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
+          const varName = key.trim();
+          return variables[varName] !== undefined ? variables[varName] : match;
+        });
+      };
+
+      const finalUrl = interpolate(requestUrl);
+
       const headers: Record<string, string> = {};
       customHeaders.forEach(h => {
         if (h.enabled && h.key.trim()) {
-          headers[h.key.trim()] = h.value;
+          headers[interpolate(h.key.trim())] = interpolate(h.value);
         }
       });
       if (authType === "bearer" && bearerToken.trim()) {
-        headers["Authorization"] = `Bearer ${bearerToken}`;
+        headers["Authorization"] = `Bearer ${interpolate(bearerToken)}`;
       }
+
+      const finalBody = ["post", "put", "patch"].includes(ep.method.toLowerCase()) && requestBody.trim()
+          ? interpolate(requestBody)
+          : undefined;
 
       const result: ResponseData = await proxyApi.proxy({
         method: ep.method.toUpperCase(),
-        url: requestUrl,
+        url: finalUrl,
         headers: Object.keys(headers).length > 0 ? headers : undefined,
-        body: ["post", "put", "patch"].includes(ep.method.toLowerCase()) && requestBody.trim()
-          ? requestBody
-          : undefined,
+        body: finalBody,
       });
 
       setResponse(result);
@@ -453,7 +468,7 @@ export function Playground() {
                        <label className="text-[10px] text-secondary font-medium uppercase tracking-tighter">Auth Type</label>
                        <select
                          value={authType}
-                         onChange={(e) => setAuthType(e.target.value as any)}
+                         onChange={(e) => setAuthType(e.target.value as "none" | "bearer")}
                          className="w-full px-3 py-2 text-sm bg-surface border border-border rounded-lg outline-none focus:border-accent text-primary cursor-pointer"
                        >
                          <option value="none">No Auth</option>

@@ -121,6 +121,7 @@ export interface Module {
   parsedSpec: ParsedSpec | null;
   rawContent: string;
   isOpen: boolean;     // sidebar collapsed/expanded
+  variables: Record<string, string>;
 }
 
 // ─── SpecContext ──────────────────────────────────────────────────
@@ -144,6 +145,8 @@ export type SpecAction =
   | { type: "PARSE_START" }
   | { type: "PARSE_ERROR"; payload: string }
   | { type: "SET_BASE_URL"; payload: string }
+  | { type: "UPDATE_MODULE_NAME"; payload: { id: string; name: string } }
+  | { type: "UPDATE_MODULE_VARIABLES"; payload: { id: string; variables: Record<string, string> } }
   | { type: "RESET" };
 
 // ─── Saved Data ───────────────────────────────────────────────────
@@ -156,6 +159,7 @@ export interface Spec {
   parsedUrl: string | null;
   isPublic: boolean;
   shareToken: string | null;
+  variables: Record<string, string>;
   createdAt: string;
   updatedAt: string;
 }

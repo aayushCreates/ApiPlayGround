@@ -99,6 +99,7 @@ export const getSpecs = async (
         parsedUrl: true,
         isPublic: true,
         shareToken: true,
+        variables: true,
         createdAt: true,
         updatedAt: true,
         // specifically omits content due to size constraints
@@ -162,7 +163,8 @@ export const updateSpec = async (
         isPublic, 
         shareToken,
         content,
-        parsedUrl 
+        parsedUrl,
+        ...(req.body.variables && { variables: req.body.variables }),
       },
     });
     res.json(updated);

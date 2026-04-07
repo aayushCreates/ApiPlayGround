@@ -44,6 +44,7 @@ export const specsApi = {
       isPublic?: boolean;
       content?: string;
       parsedUrl?: string;
+      variables?: Record<string, string>;
     }
   ): Promise<Spec> => {
     const res = await apiClient.patch(`/specs/${id}`, data);
