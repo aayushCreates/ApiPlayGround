@@ -85,5 +85,11 @@ export const generateAiResponse = async (prompt: string): Promise<string> => {
   }
 
   console.error("All AI providers failed:", errors);
+  
+  const isQuotaError = errors.some(e => e.includes("402") || e.includes("429") || e.includes("quota") || e.includes("credit balance"));
+  if (isQuotaError) {
+    throw new Error(`AI providers are currently unavailable due to billing or quota limits. Please check your Anthropic, Gemini, or OpenAI API dashboards to purchase credits or increase limits.`);
+  }
+
   throw new Error(`All AI providers failed. Details: ${errors.join(" | ")}`);
 };

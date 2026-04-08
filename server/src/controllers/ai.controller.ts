@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { redis } from "../config/redis";
 import { prisma } from "../config/db";
 import { generateAiResponse } from "../services/ai.service";
+import { getHeuristicDiagnosis } from "../utils/heuristicDebugger";
 
 export const explainEndpoint = async (
   req: Request,
@@ -180,6 +181,24 @@ export const debugError = async (
 ) => {
   try {
     const { requestDetails, responseDetails, endpointData } = req.body;
+
+    // ── 1. Local Heuristic Debugging (Free & Instant) ──
+    const errorMsg = responseDetails?.errorMessage || 
+                     (typeof responseDetails?.body === 'string' ? responseDetails.body : JSON.stringify(responseDetails?.body || ""));
+    const localDiagnosis = getHeuristicDiagnosis(errorMsg, responseDetails?.statusCode);
+
+    if (localDiagnosis) {
+      const localMarkdown = `## Local Expert Diagnosis (Instant)
+${localDiagnosis.diagnosis}
+
+## Suggested Fix
+${localDiagnosis.suggestedFix}
+
+> [!NOTE]
+> This diagnosis was generated locally by the system to save AI tokens. If you need a deeper analysis, please contact support or check your AI provider credits.`;
+      
+      return res.json({ markdown: localMarkdown, local: true });
+    }
 
     const rateLimitKey = `ai_debug:${req.clerkId}`;
     const requests = await redis.incr(rateLimitKey);
