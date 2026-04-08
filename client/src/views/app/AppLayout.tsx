@@ -4,7 +4,7 @@ import { useSpec } from "../../context/SpecContext";
 import { specsApi } from "../../api/specs";
 import { transformSpec } from "../../utils/specParser";
 import {
-  TerminalSquare, Settings, FileJson,
+  TerminalSquare, FileJson,
   Menu, X, Clock, Braces,
   ChevronRight, ChevronDown, Plus, Trash2, FolderOpen, Package,
   Edit3, Check, Sliders, LogOut
