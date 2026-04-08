@@ -546,10 +546,6 @@ export function AppLayout() {
              <div className={`flex flex-col transition-opacity duration-200 ${isExpanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'}`}>
                <span className="text-xs font-medium">My Account</span>
                <div className="flex items-center gap-2 mt-0.5">
-                 <NavLink to="/app/settings" className="text-[10px] text-secondary hover:text-primary transition-colors flex items-center">
-                   <Settings className="w-3 h-3 mr-1 shrink-0" /> Settings
-                 </NavLink>
-                 <span className="text-border text-[10px]">|</span>
                  <button 
                    onClick={() => clerk.signOut()}
                    className="text-[10px] text-secondary hover:text-danger transition-colors flex items-center cursor-pointer"
