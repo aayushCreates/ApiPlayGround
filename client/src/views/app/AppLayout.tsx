@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useLocation } from "react-router-dom";
-import { UserButton } from "@clerk/clerk-react";
+import { UserButton, useClerk } from "@clerk/clerk-react";
 import { useSpec } from "../../context/SpecContext";
 import { specsApi } from "../../api/specs";
 import { transformSpec } from "../../utils/specParser";
@@ -7,7 +7,7 @@ import {
   TerminalSquare, Settings, FileJson,
   Menu, X, Clock, Braces,
   ChevronRight, ChevronDown, Plus, Trash2, FolderOpen, Package,
-  Edit3, Check, Sliders
+  Edit3, Check, Sliders, LogOut
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import type { Module, ParsedEndpoint } from "../../types";
@@ -18,6 +18,7 @@ export function AppLayout() {
   const [isPinned, setIsPinned] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const location = useLocation();
+  const clerk = useClerk();
 
   const isExpanded = isPinned || isHovered;
 
@@ -544,9 +545,18 @@ export function AppLayout() {
              </div>
              <div className={`flex flex-col transition-opacity duration-200 ${isExpanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'}`}>
                <span className="text-xs font-medium">My Account</span>
-               <NavLink to="/app/settings" className="text-[10px] text-secondary hover:text-primary transition-colors flex items-center">
-                 <Settings className="w-3 h-3 mr-1 shrink-0" /> Settings
-               </NavLink>
+               <div className="flex items-center gap-2 mt-0.5">
+                 <NavLink to="/app/settings" className="text-[10px] text-secondary hover:text-primary transition-colors flex items-center">
+                   <Settings className="w-3 h-3 mr-1 shrink-0" /> Settings
+                 </NavLink>
+                 <span className="text-border text-[10px]">|</span>
+                 <button 
+                   onClick={() => clerk.signOut()}
+                   className="text-[10px] text-secondary hover:text-danger transition-colors flex items-center cursor-pointer"
+                 >
+                   <LogOut className="w-3 h-3 mr-1 shrink-0" /> Logout
+                 </button>
+               </div>
              </div>
           </div>
         </div>

@@ -143,7 +143,7 @@ export type SpecAction =
   | { type: "SET_ACTIVE_MODULE"; payload: string }     // module id
   | { type: "SELECT_ENDPOINT"; payload: { endpoint: ParsedEndpoint; moduleId: string; baseUrl: string } }
   | { type: "PARSE_START" }
-  | { type: "PARSE_ERROR"; payload: string }
+  | { type: "PARSE_ERROR"; payload: string }  
   | { type: "SET_BASE_URL"; payload: string }
   | { type: "UPDATE_MODULE_NAME"; payload: { id: string; name: string } }
   | { type: "UPDATE_MODULE_VARIABLES"; payload: { id: string; variables: Record<string, string> } }
